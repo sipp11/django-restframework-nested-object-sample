@@ -1,14 +1,46 @@
 from rest_framework import serializers
-from .models import Hero, Skill
+from .models import Hero, Skill, ExtraSkill
+
+
+class ExtraSkillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExtraSkill
+        exclude = ["id", "skill"]
 
 
 class SkillSerializer(serializers.ModelSerializer):
+    extras = ExtraSkillSerializer(many=True)
+
     class Meta:
         model = Skill
         exclude = [
             "hero",
             "id",
         ]
+
+    def extras_create_or_update(self, instance, extras):
+        if not extras:
+            return
+        for extra in extras:
+            _, created = ExtraSkill.objects.get_or_create(
+                skill=instance,
+                name=extra["name"],
+                defaults={"skill": instance, **extra},
+            )
+
+    def update(self, instance, validated_data):
+        extras = validated_data.pop("extras")
+        self.Meta.model.objects.filter(pk=instance.pk).update(**validated_data)
+        self.extras_create_or_update(instance, extras)
+        return instance
+
+    def create(self, validated_data):
+        extras = validated_data.pop("extras")
+        obj, created = self.Meta.model.objects.get_or_create(
+            order=validated_data["order"], defaults=validated_data
+        )
+        self.extras_create_or_update(obj, extras)
+        return obj
 
 
 class HeroSerializer(serializers.ModelSerializer):
@@ -19,15 +51,22 @@ class HeroSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def create(self, validated_data):
-        print(validated_data)
         skills = validated_data.pop("skills")
-        print("popped: ", validated_data)
-        h, created = Hero.objects.get_or_create(
+        obj, created = self.Meta.model.objects.get_or_create(
             name=validated_data["name"], defaults=validated_data
         )
-        if skills:
-            for skill in skills:
-                s, created = Skill.objects.get_or_create(
-                    hero=h, name=skill["name"], defaults={"hero": h, **skill}
-                )
-        return h
+        if not skills:
+            return obj
+
+        for skill in skills:
+            try:
+                s = Skill.objects.get(order=skill["order"])
+                # update skill
+                s1 = SkillSerializer(s, data=skill)
+                if s1.is_valid():
+                    s1.save()
+            except Skill.DoesNotExist:
+                s = SkillSerializer(data=skill)
+                if s.is_valid():
+                    s.save()
+        return obj
