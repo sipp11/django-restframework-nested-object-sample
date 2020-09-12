@@ -14,9 +14,9 @@ class SkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Skill
         exclude = [
-            "hero",
             "id",
         ]
+        extra_kwargs = {"hero": {"write_only": True, "required": False}}
 
     def extras_create_or_update(self, instance, extras):
         if not extras:
@@ -36,8 +36,12 @@ class SkillSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         extras = validated_data.pop("extras")
+        if "hero" not in validated_data:
+            raise serializers.ValidationError("Missing hero")
         obj, created = self.Meta.model.objects.get_or_create(
-            order=validated_data["order"], defaults=validated_data
+            hero=validated_data["hero"],
+            order=validated_data["order"],
+            defaults=validated_data,
         )
         self.extras_create_or_update(obj, extras)
         return obj
@@ -59,14 +63,15 @@ class HeroSerializer(serializers.ModelSerializer):
             return obj
 
         for skill in skills:
+            data = {"hero": obj.pk, **skill}
             try:
-                s = Skill.objects.get(order=skill["order"])
+                s = Skill.objects.get(hero=obj, order=skill["order"])
                 # update skill
-                s1 = SkillSerializer(s, data=skill)
+                s1 = SkillSerializer(s, data=data)
                 if s1.is_valid():
                     s1.save()
             except Skill.DoesNotExist:
-                s = SkillSerializer(data=skill)
+                s = SkillSerializer(data=data)
                 if s.is_valid():
                     s.save()
         return obj
