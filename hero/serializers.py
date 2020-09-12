@@ -36,8 +36,11 @@ class SkillSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         extras = validated_data.pop("extras")
+        h = Hero.objects.all().last()
         obj, created = self.Meta.model.objects.get_or_create(
-            order=validated_data["order"], defaults=validated_data
+            hero=h,order=validated_data["order"], 
+            defaults={"hero": h, **validated_data},
+            #defaults=validated_data
         )
         self.extras_create_or_update(obj, extras)
         return obj
