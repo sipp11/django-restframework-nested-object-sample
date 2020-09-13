@@ -7,7 +7,7 @@ from django.db.models import (
     IntegerField,
 )
 
-# Create your models here.
+
 class Hero(Model):
     name = CharField("name", max_length=200)
 
